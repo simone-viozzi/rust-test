@@ -4,7 +4,6 @@ use std::{
 };
 
 use rand::Rng;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -14,8 +13,7 @@ enum TaskType {
     Sub,
     Mul,
 }
-use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
-
+use crossbeam::channel::{bounded, Receiver, Sender};
 
 impl TaskType {
     // Associated function to generate a random TaskType
@@ -193,6 +191,8 @@ fn main() {
         let mut producer_state = producer_state.lock().unwrap();
         producer_state.producer_flag = false;
     }
+    
+    drop(tx);
 
     // Join all threads
     for thread in threads {
