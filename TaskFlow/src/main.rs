@@ -14,6 +14,8 @@ enum TaskType {
     Sub,
     Mul,
 }
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
+
 
 impl TaskType {
     // Associated function to generate a random TaskType
@@ -62,13 +64,12 @@ impl TaskProcessor {
             TaskType::Mul => *state *= task.num,
         }
 
-        println!("Processed task: id={}, new state={}", task.id, *state);
+        println!("\tProcessed task: id={}, new state={}", task.id, *state);
         thread::sleep(Duration::from_millis(self.rgn.gen_range(100..1000)));
 
         state.clone()
     }
 }
-
 
 struct ProducerState {
     next_id: u64,
@@ -77,7 +78,10 @@ struct ProducerState {
 
 impl ProducerState {
     fn new() -> Self {
-        ProducerState { next_id: 0, producer_flag: true }
+        ProducerState {
+            next_id: 0,
+            producer_flag: true,
+        }
     }
 
     fn get_next_id(&mut self) -> u64 {
@@ -87,7 +91,7 @@ impl ProducerState {
     }
 }
 
-fn producer(tx: mpsc::SyncSender<Task>, state: Arc<Mutex<ProducerState>>) {
+fn producer(tx: Sender<Task>, state: Arc<Mutex<ProducerState>>) {
     let mut rng = rand::thread_rng();
 
     loop {
@@ -109,25 +113,32 @@ fn producer(tx: mpsc::SyncSender<Task>, state: Arc<Mutex<ProducerState>>) {
             task_type,
             created_at: SystemTime::now(),
         };
+
         println!(
-            "Producing task: id={}, type={:?}, num={}",
-            task.id, task.task_type, task.num
+            "++ Producing task: thread={:?}, id={}, type={:?}, num={}",
+            thread::current().id(),
+            task.id,
+            task.task_type,
+            task.num
         );
-        tx.send(task).unwrap(); // Send the task to the queue
+        tx.send(task).unwrap();
         thread::sleep(Duration::from_millis(rng.gen_range(100..1000)));
     }
 }
 
-fn consumer(rx: Arc<Mutex<mpsc::Receiver<Task>>>) {
+fn consumer(rx: Receiver<Task>) {
     let mut rng = rand::thread_rng();
     let mut task_processor = TaskProcessor::new(rng.gen());
-    while let Ok(task) = rx.lock().unwrap().recv() {
+    while let Ok(task) = rx.recv() {
         // Receive tasks from the queue
         let creation_time = task.created_at; // Copy the creation time (SystemTime is Copy)
 
         println!(
-            "Consuming task: id={}, type={:?}, num={}",
-            task.id, task.task_type, task.num
+            "-- Consuming task: thread={:?}, id={}, type={:?}, num={}",
+            thread::current().id(),
+            task.id,
+            task.task_type,
+            task.num
         );
 
         // Process the task
@@ -137,9 +148,9 @@ fn consumer(rx: Arc<Mutex<mpsc::Receiver<Task>>>) {
         let elapsed = creation_time.elapsed().unwrap();
 
         println!(
-            "Current state: {:.4}, time elapsed: {} ms",
-            new_state,           // State with 4 decimal places
-            elapsed.as_millis()  // Elapsed time in milliseconds
+            "\tCurrent state: {:.4}, time elapsed: {} ms",
+            new_state,
+            elapsed.as_millis()
         );
 
         thread::sleep(Duration::from_millis(rng.gen_range(100..1000))); // Simulate task processing delay
@@ -151,9 +162,7 @@ fn main() {
 
     let producer_state = Arc::new(Mutex::new(ProducerState::new())); // Shared state for task IDs
 
-    let (tx, rx): (mpsc::SyncSender<Task>, mpsc::Receiver<Task>) = mpsc::sync_channel(100);
-    let rx = Arc::new(Mutex::new(rx));
-
+    let (tx, rx) = bounded(100);
 
     let mut threads: Vec<thread::JoinHandle<_>> = Vec::new(); // Vector to hold thread handles
 
@@ -169,8 +178,8 @@ fn main() {
     }
 
     for _ in 0..5 {
-        let rx_clone = Arc::clone(&rx);
-        
+        let rx_clone = rx.clone();
+
         let t = thread::spawn(move || {
             consumer(rx_clone);
         });
@@ -178,7 +187,7 @@ fn main() {
         threads.push(t);
     }
 
-    thread::sleep(Duration::from_millis(10000));
+    thread::sleep(Duration::from_millis(5000));
 
     {
         let mut producer_state = producer_state.lock().unwrap();
