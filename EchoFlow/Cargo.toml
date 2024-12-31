@@ -1,0 +1,13 @@
+[package]
+name = "EchoFlow"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crossterm = "0.28.1"
+env_logger = "0.11.6"
+log = "0.4.22"
+reqwest = "0.12.12"
+simplelog = "0.12.2"
+tokio = { version = "1.42.0", features = ["full"] }
+warp = "0.3.7"

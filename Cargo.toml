@@ -1,4 +1,4 @@
 [workspace]
-members = [ "TaskFlow", "TaskFlowTokio", "cli_calculator",
+members = [ "EchoFlow", "TaskFlow", "TaskFlowTokio", "cli_calculator",
     "hello_world", "todo_api", "todo_list", "word_counter",
 ]
